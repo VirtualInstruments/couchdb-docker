@@ -48,7 +48,6 @@ RUN set -xe; \
     mkdir -p /opt/couchdb-search/lib && \
     wget https://github.com/cloudant-labs/clouseau/releases/download/${CLOUSEAU_VERSION}/clouseau-${CLOUSEAU_VERSION}-dist.zip && \
     unzip -j clouseau-${CLOUSEAU_VERSION}-dist.zip -d /opt/couchdb-search/lib/ && \
-    # Remove some files as suggested on https://stackoverflow.com/questions/76182479/cannot-connect-couchdb-3-3-2-with-clauseau-2-21-5
     rm -f /opt/couchdb-search/lib/slf4j-api-1.7.2.jar && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*

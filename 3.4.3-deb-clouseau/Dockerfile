@@ -50,17 +50,23 @@ RUN set -xe; \
     unzip -j clouseau-${CLOUSEAU_VERSION}-dist.zip -d /opt/couchdb-search/lib/ && \
     rm -f /opt/couchdb-search/lib/slf4j-api-1.7.2.jar && \
     apt-get clean && \
+    apt-get install -y curl; \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 RUN mvn dependency:get -Dartifact=org.slf4j:slf4j-simple:${SLF4J_SIMPLE_BINDING_VERSION} -Dartifact=org.slf4j:slf4j-api:${SLF4J_API_BINDING_VERSION} && \
     mvn dependency:copy -Dartifact=org.slf4j:slf4j-simple:${SLF4J_SIMPLE_BINDING_VERSION}:jar -DoutputDirectory=/opt/couchdb-search/lib && \
     mvn dependency:copy -Dartifact=org.slf4j:slf4j-api:${SLF4J_API_BINDING_VERSION}:jar -DoutputDirectory=/opt/couchdb-search/lib
 
+# Add Temurin (Eclipse Adoptium) GPG key and repo
+RUN mkdir -p /etc/apt/keyrings && \
+    curl -fsSL https://packages.adoptium.net/artifactory/api/gpg/key/public | gpg --dearmor -o /etc/apt/keyrings/adoptium.gpg && \
+    echo "deb [signed-by=/etc/apt/keyrings/adoptium.gpg] https://packages.adoptium.net/artifactory/deb bookworm main" > /etc/apt/sources.list.d/adoptium.list
+
 RUN wget http://www.mirbsd.org/~tg/Debs/sources.txt/wtf-bookworm.sources; \
     mkdir -p /etc/apt/sources.list.d; \
     mv wtf-bookworm.sources /etc/apt/sources.list.d/; \
     apt-get update -y; \
-    apt-get install -y --no-install-recommends openjdk-8-jdk-headless apt-transport-https ca-certificates runit; \
+    apt-get update && apt-get install -y temurin-8-jdk && rm -rf /var/lib/apt/lists/* \
     cp /etc/runit/2 /sbin/runsvdir-start;
 
 # http://docs.couchdb.org/en/latest/install/unix.html#installing-the-apache-couchdb-packages
@@ -69,7 +75,6 @@ ENV GPG_COUCH_KEY \
     390EF70BB1EA12B2773962950EE62FB37A00258D
 RUN set -eux; \
     apt-get update; \
-    apt-get install -y curl; \
     export GNUPGHOME="$(mktemp -d)"; \
     curl -fL -o keys.asc https://couchdb.apache.org/repo/keys.asc; \
     gpg --batch --import keys.asc; \
@@ -95,6 +100,7 @@ RUN set -eux; \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --allow-downgrades --allow-remove-essential --allow-change-held-packages \
             couchdb="$COUCHDB_VERSION"~bookworm \
     ; \
+
     # Undo symlinks to /var/log and /var/lib
     rmdir /var/lib/couchdb /var/log/couchdb; \
     rm /opt/couchdb/data /opt/couchdb/var/log; \

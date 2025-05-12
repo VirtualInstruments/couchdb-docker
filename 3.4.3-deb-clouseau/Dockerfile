@@ -218,7 +218,7 @@ ENTRYPOINT ["tini", "-s", "--", "/docker-entrypoint.sh"]
 
 VOLUME /opt/couchdb/data
 
-# 5988: Main CouchDB endpoint
+# 5984: Main CouchDB endpoint
 # 4369: Erlang portmap daemon (epmd)
 # 9100: CouchDB cluster communication port
 EXPOSE 5984 4369

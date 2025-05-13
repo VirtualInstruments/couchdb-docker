@@ -98,7 +98,7 @@ RUN set -eux; \
 # Fetch and extract Clouseau (Debian Bookworm version)
 RUN set -xe; \
     apt-get update -y && \
-    apt-get install -y --no-install-recommends unzip wget maven && \
+    apt-get install -y --no-install-recommends unzip wget maven runit && \
     mkdir -p /opt/couchdb-search/lib && \
     wget https://github.com/cloudant-labs/clouseau/releases/download/${CLOUSEAU_VERSION}/clouseau-${CLOUSEAU_VERSION}-dist.zip && \
     unzip -j clouseau-${CLOUSEAU_VERSION}-dist.zip -d /opt/couchdb-search/lib/ && \

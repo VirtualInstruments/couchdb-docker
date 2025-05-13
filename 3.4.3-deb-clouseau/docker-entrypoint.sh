@@ -185,7 +185,7 @@ EOWARN
 
     export HOME=/opt/couchdb-search
     if [ "$(id -u)" = '0' ]; then
-        chpst -u couchdb /usr/lib/jvm/java-8-openjdk-amd64/bin/java -server \
+        chpst -u couchdb /usr/lib/jvm/temurin-8-jdk-amd64/bin/java -server \
         	 		-Xmx2G \
         	 		-Dsun.net.inetaddr.ttl=30 \
         	 		-Dsun.net.inetaddr.negative.ttl=30 \
@@ -197,7 +197,7 @@ EOWARN
         	 		com.cloudant.clouseau.Main \
         	 		/opt/couchdb-search/etc/clouseau.ini &
     else
-        chpst /usr/lib/jvm/java-8-openjdk-amd64/bin/java -server \
+        chpst /usr/lib/jvm/temurin-8-jdk-amd64/bin/java -server \
         	 		-Xmx2G \
         	 		-Dsun.net.inetaddr.ttl=30 \
         	 		-Dsun.net.inetaddr.negative.ttl=30 \

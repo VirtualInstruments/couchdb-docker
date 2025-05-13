@@ -33,6 +33,60 @@ RUN set -ex; \
      ; \
     rm -rf /var/lib/apt/lists/*
 
+
+# Install necessary tools for building OpenSSL
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        wget gcc make tar gzip perl \
+        build-essential zlib1g-dev libc6-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+
+#Script to install openssl
+WORKDIR /usr/src
+
+RUN wget https://www.openssl.org/source/openssl-1.1.1w.tar.gz  && \
+    tar -xvzf openssl-1.1.1w.tar.gz && \
+    cd openssl-1.1.1w && \
+    ./config --prefix=/opt/openssl --openssldir=/usr/local/ssl && \
+    make && \
+    make install && \
+    cd .. && \
+    rm -rf openssl-1.1.1w.tar.gz openssl-1.1.1w
+
+#Script to install zlib
+
+RUN wget https://zlib.net/zlib-1.3.1.tar.gz && \
+    tar -xvzf zlib-1.3.1.tar.gz && \
+    cd zlib-1.3.1 && \
+    ./configure --prefix=/opt/zlib && \
+    make && \
+    make install && \
+    cd .. && \
+    rm -rf zlib-1.3.1.tar.gz zlib-1.3.1
+
+#Script to install curl
+
+RUN wget https://curl.se/download/curl-8.12.1.tar.gz && \
+    tar -xzvf curl-8.12.1.tar.gz && \
+    cd curl-8.12.1 && \
+    ./configure --prefix /opt/curl --with-openssl=/opt/openssl --with-zlib=/opt/zlib --without-libpsl && \
+    make && \
+    make install && \
+    cd .. && \
+    rm -rf curl-8.12.1.tar.gz curl-8.12.1
+
+# Overwrite default curl, openssl with latest-built curl, openssl
+RUN ln -sf /opt/curl/bin/curl /usr/bin/curl && \
+    ln -sf /opt/openssl/bin/openssl /usr/bin/openssl
+
+# Remove specific old libssl library
+RUN rm -f /usr/lib64/libssl.so.1.1.1k
+
+# Link /usr/lib64/libssl.so.1.1 to /opt/openssl/lib/libssl.so.1.1
+RUN ln -sf /opt/openssl/lib/libssl.so.1.1 /usr/lib64/libssl.so.1.1
+
+
 # grab tini for signal handling and zombie reaping
 # see https://github.com/apache/couchdb-docker/pull/28#discussion_r141112407
 RUN set -eux; \
@@ -50,17 +104,23 @@ RUN set -xe; \
     unzip -j clouseau-${CLOUSEAU_VERSION}-dist.zip -d /opt/couchdb-search/lib/ && \
     rm -f /opt/couchdb-search/lib/slf4j-api-1.7.2.jar && \
     apt-get clean && \
+    apt-get install -y curl; \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 RUN mvn dependency:get -Dartifact=org.slf4j:slf4j-simple:${SLF4J_SIMPLE_BINDING_VERSION} -Dartifact=org.slf4j:slf4j-api:${SLF4J_API_BINDING_VERSION} && \
     mvn dependency:copy -Dartifact=org.slf4j:slf4j-simple:${SLF4J_SIMPLE_BINDING_VERSION}:jar -DoutputDirectory=/opt/couchdb-search/lib && \
     mvn dependency:copy -Dartifact=org.slf4j:slf4j-api:${SLF4J_API_BINDING_VERSION}:jar -DoutputDirectory=/opt/couchdb-search/lib
 
+# Add Temurin (Eclipse Adoptium) GPG key and repo
+RUN mkdir -p /etc/apt/keyrings && \
+    curl -fsSL https://packages.adoptium.net/artifactory/api/gpg/key/public | gpg --dearmor -o /etc/apt/keyrings/adoptium.gpg && \
+    echo "deb [signed-by=/etc/apt/keyrings/adoptium.gpg] https://packages.adoptium.net/artifactory/deb bookworm main" > /etc/apt/sources.list.d/adoptium.list
+
 RUN wget http://www.mirbsd.org/~tg/Debs/sources.txt/wtf-bookworm.sources; \
     mkdir -p /etc/apt/sources.list.d; \
     mv wtf-bookworm.sources /etc/apt/sources.list.d/; \
     apt-get update -y; \
-    apt-get install -y --no-install-recommends openjdk-8-jdk-headless apt-transport-https ca-certificates runit; \
+    apt-get update && apt-get install -y temurin-8-jdk && rm -rf /var/lib/apt/lists/* \
     cp /etc/runit/2 /sbin/runsvdir-start;
 
 # http://docs.couchdb.org/en/latest/install/unix.html#installing-the-apache-couchdb-packages
@@ -69,7 +129,6 @@ ENV GPG_COUCH_KEY \
     390EF70BB1EA12B2773962950EE62FB37A00258D
 RUN set -eux; \
     apt-get update; \
-    apt-get install -y curl; \
     export GNUPGHOME="$(mktemp -d)"; \
     curl -fL -o keys.asc https://couchdb.apache.org/repo/keys.asc; \
     gpg --batch --import keys.asc; \
@@ -113,6 +172,9 @@ RUN set -eux; \
     chmod -f 0777 /opt/couchdb/etc/local.d; \
     # apt clean-up
     rm -rf /var/lib/apt/lists/*;
+
+ENV PATH=/opt/curl/bin/:/opt/openssl/:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+LD_LIBRARY_PATH=/opt/openssl/lib:/opt/zlib/lib/
 
 # Copy Clouseau jar and set directory permissions
 # @TODO: Should we push local.ini from the config-store repo?
@@ -159,6 +221,6 @@ VOLUME /opt/couchdb/data
 # 5984: Main CouchDB endpoint
 # 4369: Erlang portmap daemon (epmd)
 # 9100: CouchDB cluster communication port
-EXPOSE 5984 4369 9100
+EXPOSE 5984 4369
 CMD ["/opt/couchdb/bin/couchdb"]
 

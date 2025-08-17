@@ -76,7 +76,7 @@ RUN set -eux; \
     gpg --batch --export "${GPG_COUCH_KEY}" > /usr/share/keyrings/couchdb-archive-keyring.gpg; \
     command -v gpgconf && gpgconf --kill all || :; \
     rm -rf "$GNUPGHOME"; \
-    apt-key list; \
+    #apt-key list; \
     apt purge -y --autoremove curl; \
     rm -rf /var/lib/apt/lists/*
 

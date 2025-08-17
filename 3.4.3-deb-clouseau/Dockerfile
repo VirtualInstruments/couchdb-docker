@@ -83,7 +83,7 @@ RUN set -eux; \
 ENV COUCHDB_VERSION 3.4.3
 
 RUN . /etc/os-release; \
-    echo "deb [signed-by=/usr/share/keyrings/couchdb-archive-keyring.gpg] https://apache.jfrog.io/artifactory/couchdb-deb/ ${VERSION_CODENAME} main" | \
+    echo "deb [signed-by=/usr/share/keyrings/couchdb-archive-keyring.gpg] https://apache.jfrog.io/artifactory/couchdb-deb/ bookworm main main" | \
         tee /etc/apt/sources.list.d/couchdb.list >/dev/null
 
 # https://github.com/apache/couchdb-pkg/blob/master/debian/README.Debian

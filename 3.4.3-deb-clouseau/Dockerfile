@@ -10,7 +10,7 @@
 # License for the specific language governing permissions and limitations under
 # the License.
 
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 
 ARG CLOUSEAU_VERSION=2.25.0
 ARG SLF4J_SIMPLE_BINDING_VERSION=2.0.7

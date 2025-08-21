@@ -1,0 +1,82 @@
+FROM alpine:3.22
+
+LABEL maintainer="CouchDB Developers <dev@couchdb.apache.org>"
+
+ARG COUCHDB_VERSION=3.5.0
+ARG CLOUSEAU_VERSION=2.25.0
+ARG SLF4J_SIMPLE_BINDING_VERSION=2.0.7
+ARG SLF4J_API_BINDING_VERSION=2.0.7
+
+# Add CouchDB user and group
+RUN addgroup -g 5984 couchdb && \
+    adduser -D -u 5984 -h /opt/couchdb -G couchdb couchdb
+
+# Install build/runtime dependencies (minimal working set)
+RUN apk update && apk add --no-cache \
+    build-base \
+    erlang \
+    erlang-reltool \
+    erlang-dev \
+    curl \
+    wget \
+    git \
+    python3 \
+    py3-pip \
+    icu-dev \
+    openssl-dev \
+    ncurses-dev \
+    mozjs-dev \
+    bash sudo tini runit maven openjdk8 unzip
+
+# Build CouchDB from source
+WORKDIR /src
+RUN wget https://downloads.apache.org/couchdb/source/${COUCHDB_VERSION}/apache-couchdb-${COUCHDB_VERSION}.tar.gz && \
+    tar xzf apache-couchdb-${COUCHDB_VERSION}.tar.gz && \
+    cd apache-couchdb-${COUCHDB_VERSION} && \
+    ./configure --disable-docs --spidermonkey-version 128 && \
+    make release
+
+# Move compiled CouchDB release to /opt/couchdb and set permissions
+RUN mv /src/apache-couchdb-${COUCHDB_VERSION}/rel/couchdb /opt/couchdb && \
+    chown -R couchdb:couchdb /opt/couchdb && \
+    chmod -R 0770 /opt/couchdb
+
+# Fetch and extract Clouseau
+RUN mkdir -p /opt/couchdb-search/lib /opt/couchdb-search/etc && \
+    wget https://github.com/cloudant-labs/clouseau/releases/download/${CLOUSEAU_VERSION}/clouseau-${CLOUSEAU_VERSION}-dist.zip && \
+    unzip -j clouseau-${CLOUSEAU_VERSION}-dist.zip -d /opt/couchdb-search/lib/ && \
+    rm clouseau-${CLOUSEAU_VERSION}-dist.zip && \
+    rm -f /opt/couchdb-search/lib/slf4j-api-1.7.2.jar
+
+# Fix SLF4J dependencies using Maven
+RUN mvn dependency:get -Dartifact=org.slf4j:slf4j-simple:${SLF4J_SIMPLE_BINDING_VERSION} -Dartifact=org.slf4j:slf4j-api:${SLF4J_API_BINDING_VERSION} && \
+    mvn dependency:copy -Dartifact=org.slf4j:slf4j-simple:${SLF4J_SIMPLE_BINDING_VERSION}:jar -DoutputDirectory=/opt/couchdb-search/lib && \
+    mvn dependency:copy -Dartifact=org.slf4j:slf4j-api:${SLF4J_API_BINDING_VERSION}:jar -DoutputDirectory=/opt/couchdb-search/lib
+
+# Set ownership and permissions for Clouseau
+RUN chown -R couchdb:couchdb /opt/couchdb-search && \
+    chmod -R 0775 /opt/couchdb-search
+
+# Copy configuration files (these must be included in build context)
+COPY --chown=couchdb:couchdb resources/clouseau/clouseau.ini /opt/couchdb-search/etc/
+COPY --chown=couchdb:couchdb resources/clouseau/simplelogger.properties /opt/couchdb-search/lib/
+COPY --chown=couchdb:couchdb resources/10-docker-default.ini /opt/couchdb/etc/default.d/
+COPY --chown=couchdb:couchdb resources/vm.args /opt/couchdb/etc/
+COPY --chown=couchdb:couchdb resources/run /etc/service/couchdb/run
+COPY --chown=couchdb:couchdb resources/run_clouseau /etc/service/couchdb-search/run
+
+COPY --chown=couchdb:couchdb local.ini /opt/couchdb/etc/local.d/
+COPY --chown=couchdb:couchdb docker-entrypoint.sh /usr/local/bin/
+RUN ln -s /usr/local/bin/docker-entrypoint.sh /docker-entrypoint.sh
+
+# Set user and working directory
+USER couchdb
+WORKDIR /opt/couchdb
+
+VOLUME /opt/couchdb/data
+
+EXPOSE 5984 4369 9100
+
+ENTRYPOINT ["tini", "-s", "--", "/docker-entrypoint.sh"]
+CMD ["/opt/couchdb/bin/couchdb"]
+

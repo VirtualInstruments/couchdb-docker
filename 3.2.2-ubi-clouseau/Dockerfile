@@ -24,7 +24,7 @@ RUN set -xe; \
     microdnf update -y && rm -rf /var/cache/yum && \
     microdnf install -y unzip wget maven && \
     wget https://github.com/cloudant-labs/clouseau/releases/download/${CLOUSEAU_VERSION}/clouseau-${CLOUSEAU_VERSION}-dist.zip && \
-    unzip -j clouseau-${CLOUSEAU_VERSION}-dist.zip -d clouseau && \ 
+    unzip -j clouseau-${CLOUSEAU_VERSION}-dist.zip -d clouseau && \
     microdnf clean all; \
     rm -rf /var/cache/yum
 
@@ -33,6 +33,54 @@ RUN mvn dependency:get -Dartifact=org.slf4j:slf4j-simple:${SLF4J_SIMPLE_BINDING_
     mvn dependency:copy -Dartifact=org.slf4j:slf4j-simple:${SLF4J_SIMPLE_BINDING_VERSION}:jar -DoutputDirectory=clouseau
 
 FROM registry.access.redhat.com/ubi8/ubi-minimal
+
+# Install necessary tools for building OpenSSL
+RUN microdnf update -y && \
+    microdnf install -y wget gcc make tar gzip perl
+
+#Script to install openssl
+WORKDIR /usr/src
+
+RUN wget https://www.openssl.org/source/openssl-1.1.1w.tar.gz  && \
+    tar -xvzf openssl-1.1.1w.tar.gz && \
+    cd openssl-1.1.1w && \
+    ./config --prefix=/opt/openssl --openssldir=/usr/local/ssl && \
+    make && \
+    make install && \
+    cd .. && \
+    rm -rf openssl-1.1.1w.tar.gz openssl-1.1.1w
+
+#Script to install zlib
+
+RUN wget https://zlib.net/zlib-1.3.1.tar.gz && \
+    tar -xvzf zlib-1.3.1.tar.gz && \
+    cd zlib-1.3.1 && \
+    ./configure --prefix=/opt/zlib && \
+    make && \
+    make install && \
+    cd .. && \
+    rm -rf zlib-1.3.1.tar.gz zlib-1.3.1
+
+#Script to install curl
+
+RUN wget https://curl.se/download/curl-8.12.1.tar.gz && \
+    tar -xzvf curl-8.12.1.tar.gz && \
+    cd curl-8.12.1 && \
+    ./configure --prefix /opt/curl --with-openssl=/opt/openssl --with-zlib=/opt/zlib --without-libpsl && \
+    make && \
+    make install && \
+    cd .. && \
+    rm -rf curl-8.12.1.tar.gz curl-8.12.1
+
+# Overwrite default curl, openssl with latest-built curl, openssl
+RUN ln -sf /opt/curl/bin/curl /usr/bin/curl && \
+    ln -sf /opt/openssl/bin/openssl /usr/bin/openssl
+
+# Remove specific old libssl library
+RUN rm -f /usr/lib64/libssl.so.1.1.1k
+
+# Link /usr/lib64/libssl.so.1.1 to /opt/openssl/lib/libssl.so.1.1
+RUN ln -sf /opt/openssl/lib/libssl.so.1.1 /usr/lib64/libssl.so.1.1
 
 ARG RELEASE
 ARG BUILD_DATE
@@ -99,6 +147,8 @@ RUN set -xe; \
     find /opt/couchdb/etc -type f ! -perm 0644 -exec chmod -f 0644 '{}' +; \
 # Setup directories and permissions for data.
     chmod 777 /opt/couchdb/data
+ENV PATH=/opt/curl/bin/:/opt/openssl/:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+LD_LIBRARY_PATH=/opt/openssl/lib:/opt/zlib/lib/
 
 # Copy Clouseau jar and set directory permissions
 COPY resources/clouseau/clouseau.ini /opt/couchdb-search/etc/
@@ -126,12 +176,14 @@ RUN chmod -R 777 /etc/service/couchdb; \
     chmod 777 /usr/local/bin/docker-entrypoint.sh; \
 # symlink to root folder
     ln -s usr/local/bin/docker-entrypoint.sh /docker-entrypoint.sh
+ENV LD_LIBRARY_PATH=/usr/lib:/usr/lib64/
+RUN rpm -qa | grep "curl"
 
 ENTRYPOINT ["/docker-entrypoint.sh"]
 VOLUME /opt/couchdb/data
 
-# 5984: Main CouchDB endpoint
+# 5988: Main CouchDB endpoint
 # 4369: Erlang portmap daemon (epmd)
 # 9100: CouchDB cluster communication port
-EXPOSE 5984 4369 9100
+EXPOSE 5988 4369
 CMD ["/opt/couchdb/bin/couchdb"]
